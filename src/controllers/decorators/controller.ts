@@ -1,7 +1,28 @@
+import { NextFunction, Request, RequestHandler, Response } from 'express';
 import 'reflect-metadata';
 import { AppRouter } from '../../AppRouter';
 import { MetadataKeys } from './MetadataKeys';
 import { Methods } from './Methods';
+
+function bodyValidators(keys: string[]): RequestHandler {
+  return function (req: Request, res: Response, next: NextFunction) {
+    if (!req.body) {
+      res.status(422).send('Invalid request');
+
+      return;
+    }
+
+    for (const key of keys) {
+      if (!req.body[key]) {
+        res.status(422).send(`Missing property ${key}`);
+
+        return;
+      }
+    }
+
+    next();
+  };
+}
 
 export function controller(routePrefix: string) {
   return function (target: Function) {
@@ -25,9 +46,17 @@ export function controller(routePrefix: string) {
       const middlewares =
         Reflect.getMetadata(MetadataKeys.middleware, target.prototype, key) ??
         [];
+      const requiredBodyProps =
+        Reflect.getMetadata(MetadataKeys.validator, target.prototype, key) ??
+        [];
 
       if (path) {
-        router[method](`${routePrefix}${path}`, ...middlewares, routeHandler);
+        router[method](
+          `${routePrefix}${path}`,
+          ...middlewares,
+          bodyValidators(requiredBodyProps),
+          routeHandler
+        );
       }
     }
   };
